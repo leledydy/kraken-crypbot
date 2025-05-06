@@ -2,10 +2,14 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
 require('dotenv').config();
-require('./server'); // keep-alive express server
+require('./server'); // Keep-alive ping server
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 const coins = [
@@ -14,9 +18,21 @@ const coins = [
   'cardano', 'avalanche-2'
 ];
 
-const channelIds = process.env.CHANNEL_IDS.split(',').map(id => id.trim());
+const channelIds = process.env.CHANNEL_IDS?.split(',').map(id => id.trim());
 
-async function fetchAndSendPrices() {
+client.once('ready', async () => {
+  console.log(`🤖 Logged in as ${client.user.tag}`);
+
+  await sendCryptoUpdate('📊 **Initial Crypto Prices (USD)**');
+
+  // ⏰ Schedule hourly updates
+  cron.schedule('0 * * * *', () => {
+    sendCryptoUpdate('⏰ **Hourly Crypto Update (USD)**');
+  });
+});
+
+// Reusable message sender
+async function sendCryptoUpdate(header) {
   try {
     const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
       params: {
@@ -25,7 +41,7 @@ async function fetchAndSendPrices() {
       }
     });
 
-    let message = `📊 **Top 10 Crypto Prices (USD)**\n`;
+    let message = `${header}\n`;
     for (const coin of coins) {
       const price = res.data[coin]?.usd;
       if (price !== undefined) {
@@ -35,22 +51,16 @@ async function fetchAndSendPrices() {
     }
 
     for (const id of channelIds) {
-      const channel = await client.channels.fetch(id);
-      await channel.send(message);
+      try {
+        const channel = await client.channels.fetch(id);
+        await channel.send(message);
+      } catch (err) {
+        console.error(`❌ Failed to send to channel ${id}:`, err.message);
+      }
     }
-
-    console.log('✅ Prices sent');
   } catch (err) {
-    console.error('❌ Error fetching/sending prices:', err.message);
+    console.error('❌ Failed to fetch prices:', err.message);
   }
 }
-
-client.once('ready', () => {
-  console.log(`🤖 Logged in as ${client.user.tag}`);
-  fetchAndSendPrices(); // send on startup
-
-  // hourly updates
-  cron.schedule('0 * * * *', fetchAndSendPrices);
-});
 
 client.login(process.env.DISCORD_TOKEN);
