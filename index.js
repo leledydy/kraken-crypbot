@@ -31,6 +31,46 @@ client.once('ready', async () => {
   });
 });
 
+// Fetch historical prices for trend analysis
+async function get24hrPriceData(coin) {
+  try {
+    const res = await axios.get(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart`, {
+      params: {
+        vs_currency: 'usd',
+        days: '1' // Last 24 hours
+      }
+    });
+    return res.data.prices; // returns array of [timestamp, price]
+  } catch (err) {
+    console.error(`❌ Failed to fetch 24hr data for ${coin}:`, err.message);
+    return [];
+  }
+}
+
+// Determine market trend and buying suggestion
+async function getMarketTrendAndSuggestion(coin) {
+  const priceData = await get24hrPriceData(coin);
+  if (priceData.length === 0) return { trend: 'Unknown', suggestion: 'No data available' };
+
+  const price24hrAgo = priceData[0][1];
+  const priceNow = priceData[priceData.length - 1][1];
+
+  // Market Trend: Compare prices
+  const trend = priceNow > price24hrAgo ? 'Upward Trend' : 'Downward Trend';
+
+  // Buying suggestion: Simple rule for significant drop (e.g., 5% drop)
+  const priceChange = ((priceNow - price24hrAgo) / price24hrAgo) * 100;
+  let suggestion = 'No suggestion';
+
+  if (priceChange < -5) {
+    suggestion = `📉 Significant drop detected! Consider buying now as it dropped by ${Math.abs(priceChange).toFixed(2)}%.`;
+  } else if (priceChange > 5) {
+    suggestion = `📈 The price has increased by ${priceChange.toFixed(2)}%. Consider waiting for a potential dip.`;
+  }
+
+  return { trend, suggestion };
+}
+
 // Reusable message sender
 async function sendCryptoUpdate(header) {
   try {
@@ -47,6 +87,11 @@ async function sendCryptoUpdate(header) {
       if (price !== undefined) {
         const name = coin.charAt(0).toUpperCase() + coin.slice(1).replace(/-/g, ' ');
         message += `• **${name}**: $${price.toLocaleString()}\n`;
+
+        // Fetch market trend and buying suggestion
+        const { trend, suggestion } = await getMarketTrendAndSuggestion(coin);
+        message += `  → **Market Trend**: ${trend}\n`;
+        message += `  → **Suggestion**: ${suggestion}\n`;
       }
     }
 
