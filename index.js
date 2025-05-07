@@ -31,7 +31,7 @@ client.once('ready', async () => {
   });
 });
 
-// Fetch historical prices for trend analysis
+// Fetch historical prices for trend analysis with error handling
 async function get24hrPriceData(coin) {
   try {
     const res = await axios.get(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart`, {
@@ -108,7 +108,7 @@ async function sendCryptoUpdate(header) {
 
 // Send message with image (using the chart URL)
 async function sendMessageWithImage(message) {
-  for (const id of channelIds) 
+  for (const id of channelIds) {
     try {
       const channel = await client.channels.fetch(id);
       // Send the message with the chart URL
@@ -119,4 +119,7 @@ async function sendMessageWithImage(message) {
   }
 }
 
-client.login(process.env.DISCORD_TOKEN);
+// Log in with Discord token and handle errors
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+  console.error('❌ Failed to log in:', err.message);
+});
