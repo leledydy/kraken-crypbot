@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, MessageAttachment } = require('discord.js');
+const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js'); // Use AttachmentBuilder instead of MessageAttachment
 const axios = require('axios');
 const cron = require('node-cron');
 require('dotenv').config();
@@ -98,7 +98,7 @@ async function sendCryptoUpdate(header) {
         message += `📊 [Price Chart for ${name}](${chartUrl})\n`;
 
         // If you have custom images, you can generate or provide them here
-        const attachment = new MessageAttachment('path_to_image_or_chart.png'); // Attach image if you generate one
+        const attachment = new AttachmentBuilder('path_to_image_or_chart.png'); // Use AttachmentBuilder here
         await sendWithImage(message, attachment);
       }
     }
