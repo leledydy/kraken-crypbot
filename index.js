@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, MessageAttachment } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
 require('dotenv').config();
@@ -71,7 +71,7 @@ async function getMarketTrendAndSuggestion(coin) {
   return { trend, suggestion };
 }
 
-// Reusable message sender
+// Reusable message sender with images
 async function sendCryptoUpdate(header) {
   try {
     const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
@@ -88,23 +88,34 @@ async function sendCryptoUpdate(header) {
         const name = coin.charAt(0).toUpperCase() + coin.slice(1).replace(/-/g, ' ');
         message += `• **${name}**: $${price.toLocaleString()}\n`;
 
-        // Fetch market trend and buying suggestion
+        // Add market trend and buying suggestion
         const { trend, suggestion } = await getMarketTrendAndSuggestion(coin);
         message += `  → **Market Trend**: ${trend}\n`;
         message += `  → **Suggestion**: ${suggestion}\n`;
-      }
-    }
 
-    for (const id of channelIds) {
-      try {
-        const channel = await client.channels.fetch(id);
-        await channel.send(message);
-      } catch (err) {
-        console.error(`❌ Failed to send to channel ${id}:`, err.message);
+        // Add a link to a price chart image or generate one dynamically
+        const chartUrl = `https://www.tradingview.com/chart/?symbol=BINANCE%3A${coin.toUpperCase()}USDT`; // Example link
+        message += `📊 [Price Chart for ${name}](${chartUrl})\n`;
+
+        // If you have custom images, you can generate or provide them here
+        const attachment = new MessageAttachment('path_to_image_or_chart.png'); // Attach image if you generate one
+        await sendWithImage(message, attachment);
       }
     }
   } catch (err) {
     console.error('❌ Failed to fetch prices:', err.message);
+  }
+}
+
+// Send message with image
+async function sendWithImage(message, attachment) {
+  for (const id of channelIds) {
+    try {
+      const channel = await client.channels.fetch(id);
+      await channel.send({ content: message, files: [attachment] });
+    } catch (err) {
+      console.error(`❌ Failed to send to channel ${id}:`, err.message);
+    }
   }
 }
 
