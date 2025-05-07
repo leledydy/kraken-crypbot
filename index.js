@@ -31,7 +31,7 @@ client.once('ready', async () => {
   });
 });
 
-// Fetch historical prices for trend analysis with error handling
+// Fetch historical prices for trend analysis
 async function get24hrPriceData(coin) {
   try {
     const res = await axios.get(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart`, {
@@ -71,7 +71,7 @@ async function getMarketTrendAndSuggestion(coin) {
   return { trend, suggestion };
 }
 
-// Reusable message sender with images (using TradingView chart links)
+// Reusable message sender with images (using TradingView chart link at the top)
 async function sendCryptoUpdate(header) {
   try {
     const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
@@ -81,7 +81,10 @@ async function sendCryptoUpdate(header) {
       }
     });
 
-    let message = `${header}\n`;
+    // Single TradingView chart link at the top
+    const chartUrl = `https://www.tradingview.com/chart/?symbol=BINANCE%3A${coins[0].toUpperCase()}USDT`; // Use the first coin's chart
+    let message = `${header}\n📊 [Price Chart for ${coins[0].charAt(0).toUpperCase() + coins[0].slice(1)}]((${chartUrl}))\n\n`;
+
     for (const coin of coins) {
       const price = res.data[coin]?.usd;
       if (price !== undefined) {
@@ -92,15 +95,11 @@ async function sendCryptoUpdate(header) {
         const { trend, suggestion } = await getMarketTrendAndSuggestion(coin);
         message += `  → **Market Trend**: ${trend}\n`;
         message += `  → **Suggestion**: ${suggestion}\n`;
-
-        // Add a link to a price chart image (TradingView or other charting services)
-        const chartUrl = `https://www.tradingview.com/chart/?symbol=BINANCE%3A${coin.toUpperCase()}USDT`; // Example link
-        message += `📊 [Price Chart for ${name}](${chartUrl})\n`;
-
-        // Send message with image URL directly, no attachment required
-        await sendMessageWithImage(message);
       }
     }
+
+    // Send the message with the TradingView chart link and market data
+    await sendMessageWithImage(message);
   } catch (err) {
     console.error('❌ Failed to fetch prices:', err.message);
   }
@@ -119,7 +118,4 @@ async function sendMessageWithImage(message) {
   }
 }
 
-// Log in with Discord token and handle errors
-client.login(process.env.DISCORD_TOKEN).catch(err => {
-  console.error('❌ Failed to log in:', err.message);
-});
+client.login(process.env.DISCORD_TOKEN);
