@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js'); // Use AttachmentBuilder instead of MessageAttachment
+const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
 require('dotenv').config();
@@ -71,7 +71,7 @@ async function getMarketTrendAndSuggestion(coin) {
   return { trend, suggestion };
 }
 
-// Reusable message sender with images
+// Reusable message sender with images (using TradingView chart links)
 async function sendCryptoUpdate(header) {
   try {
     const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
@@ -93,13 +93,12 @@ async function sendCryptoUpdate(header) {
         message += `  → **Market Trend**: ${trend}\n`;
         message += `  → **Suggestion**: ${suggestion}\n`;
 
-        // Add a link to a price chart image or generate one dynamically
+        // Add a link to a price chart image (TradingView or other charting services)
         const chartUrl = `https://www.tradingview.com/chart/?symbol=BINANCE%3A${coin.toUpperCase()}USDT`; // Example link
         message += `📊 [Price Chart for ${name}](${chartUrl})\n`;
 
-        // If you have custom images, you can generate or provide them here
-        const attachment = new AttachmentBuilder('path_to_image_or_chart.png'); // Use AttachmentBuilder here
-        await sendWithImage(message, attachment);
+        // Send message with image URL directly, no attachment required
+        await sendMessageWithImage(message);
       }
     }
   } catch (err) {
@@ -107,12 +106,13 @@ async function sendCryptoUpdate(header) {
   }
 }
 
-// Send message with image
-async function sendWithImage(message, attachment) {
-  for (const id of channelIds) {
+// Send message with image (using the chart URL)
+async function sendMessageWithImage(message) {
+  for (const id of channelIds) 
     try {
       const channel = await client.channels.fetch(id);
-      await channel.send({ content: message, files: [attachment] });
+      // Send the message with the chart URL
+      await channel.send({ content: message });
     } catch (err) {
       console.error(`❌ Failed to send to channel ${id}:`, err.message);
     }
