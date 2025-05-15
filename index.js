@@ -26,8 +26,8 @@ client.once('ready', async () => {
   await sendCryptoUpdate('📊 **Initial Crypto Prices (USD)**');
 
   // ⏰ Schedule hourly updates
-  cron.schedule('0 * * * *', () => {
-    sendCryptoUpdate('⏰ **Hourly Crypto Update (USD)**');
+  cron.schedule('0 */6 * * *', () => {
+  sendCryptoUpdate('🕕 **6-Hourly Crypto Update (USD)**');
   });
 });
 
