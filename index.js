@@ -15,7 +15,7 @@ const client = new Client({
 const coins = [
   'bitcoin', 'ethereum', 'tether', 'binancecoin',
   'solana', 'ripple', 'dogecoin', 'toncoin',
-  'cardano', 'avalanche-2'
+  'cardano', 'toncoin'
 ];
 
 const channelIds = process.env.CHANNEL_IDS?.split(',').map(id => id.trim());
