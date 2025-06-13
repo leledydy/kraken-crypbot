@@ -23,97 +23,96 @@ const channelIds = process.env.CHANNEL_IDS?.split(',').map(id => id.trim());
 client.once('ready', async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
 
-  await sendCryptoUpdate('📊 **Initial Crypto Prices (USD)**');
+  await sendCryptoUpdate('📊 **Initial Crypto Market Pulse (USD)**');
 
-  // ⏰ Schedule hourly updates
+  // ⏰ Every 6 hours
   cron.schedule('0 */6 * * *', () => {
-  sendCryptoUpdate('🕕 **6-Hourly Crypto Update (USD)**');
+    sendCryptoUpdate('⏰ **6-Hourly Crypto Market Pulse (USD)**');
   });
 });
 
-// Fetch historical prices for trend analysis
 async function get24hrPriceData(coin) {
   try {
     const res = await axios.get(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart`, {
-      params: {
-        vs_currency: 'usd',
-        days: '1' // Last 24 hours
-      }
+      params: { vs_currency: 'usd', days: '1' }
     });
-    return res.data.prices; // returns array of [timestamp, price]
+    return res.data.prices;
   } catch (err) {
-    console.error(`❌ Failed to fetch 24hr data for ${coin}:`, err.message);
+    console.error(`❌ 24hr data for ${coin} failed:`, err.message);
     return [];
   }
 }
 
-// Determine market trend and buying suggestion
 async function getMarketTrendAndSuggestion(coin) {
-  const priceData = await get24hrPriceData(coin);
-  if (priceData.length === 0) return { trend: 'Unknown', suggestion: 'No data available' };
+  const data = await get24hrPriceData(coin);
+  if (!data.length) return { trend: 'Unknown', suggestion: 'No data available', change: 0 };
 
-  const price24hrAgo = priceData[0][1];
-  const priceNow = priceData[priceData.length - 1][1];
+  const first = data[0][1];
+  const last = data[data.length - 1][1];
+  const change = ((last - first) / first) * 100;
 
-  // Market Trend: Compare prices
-  const trend = priceNow > price24hrAgo ? 'Upward Trend' : 'Downward Trend';
+  let trend = change > 0 ? '📈 Upward Trend' : '📉 Downward Trend';
+  let suggestion = '🔎 No strong signal';
 
-  // Buying suggestion: Simple rule for significant drop (e.g., 5% drop)
-  const priceChange = ((priceNow - price24hrAgo) / price24hrAgo) * 100;
-  let suggestion = 'No suggestion';
+  if (change <= -5) {
+    suggestion = `💸 Dropped ${Math.abs(change).toFixed(2)}% — Possible buy opportunity.`;
+  } else if (change >= 5) {
+    suggestion = `🚀 Rose ${change.toFixed(2)}% — Wait for pullback?`;
 
-  if (priceChange < -5) {
-    suggestion = `📉 Significant drop detected! Consider buying now as it dropped by ${Math.abs(priceChange).toFixed(2)}%.`;
-  } else if (priceChange > 5) {
-    suggestion = `📈 The price has increased by ${priceChange.toFixed(2)}%. Consider waiting for a potential dip.`;
   }
-
-  return { trend, suggestion };
+  return { trend, suggestion, change };
 }
 
-// Reusable message sender with images (using TradingView chart link at the top)
 async function sendCryptoUpdate(header) {
   try {
-    const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+    const priceRes = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
       params: {
         ids: coins.join(','),
         vs_currencies: 'usd'
       }
     });
 
-    // Single TradingView chart link at the top
-    const chartUrl = `https://www.tradingview.com/chart/?symbol=BINANCE%3A${coins[0].toUpperCase()}USDT`; // Use the first coin's chart
-    let message = `${header}\n📊 [Price Chart for ${coins[0].charAt(0).toUpperCase() + coins[0].slice(1)}]((${chartUrl}))\n\n`;
+    let message = `${header}\n\n`;
+    let hottest = { coin: '', change: -Infinity };
 
     for (const coin of coins) {
-      const price = res.data[coin]?.usd;
-      if (price !== undefined) {
-        const name = coin.charAt(0).toUpperCase() + coin.slice(1).replace(/-/g, ' ');
-        message += `• **${name}**: $${price.toLocaleString()}\n`;
+      const price = priceRes.data[coin]?.usd;
+      if (price === undefined) continue;
 
-        // Add market trend and buying suggestion
-        const { trend, suggestion } = await getMarketTrendAndSuggestion(coin);
-        message += `  → **Market Trend**: ${trend}\n`;
-        message += `  → **Suggestion**: ${suggestion}\n`;
+      const displayName = coin.charAt(0).toUpperCase() + coin.slice(1).replace(/-/g, ' ');
+      const { trend, suggestion, change } = await getMarketTrendAndSuggestion(coin);
+
+      if (change > hottest.change) {
+        hottest = { coin: displayName, change: change.toFixed(2), suggestion };
       }
+
+      message += `🪙 **${displayName}**\n`;
+      message += `• Price: $${price.toLocaleString()}\n`;
+      message += `• ${trend}\n`;
+      message += `• ${suggestion}\n\n`;
     }
 
-    // Send the message with the TradingView chart link and market data
-    await sendMessageWithImage(message);
+    // Add prediction section for the hottest coin
+    if (hottest.coin) {
+      message += `🔥 **Buzz & Prediction**\n`;
+      message += `The hottest mover is **${hottest.coin}**, surging by **${hottest.change}%** in the last 24h.\n`;
+      message += `📢 Buzz: "Momentum looks strong — Keep your eyes on ${hottest.coin}!"\n`;
+      message += `📊 Forecast: If momentum continues, expect more volatility ahead!\n`;
+    }
+
+    await sendToChannels(message);
   } catch (err) {
-    console.error('❌ Failed to fetch prices:', err.message);
+    console.error('❌ Price fetch failed:', err.message);
   }
 }
 
-// Send message with image (using the chart URL)
-async function sendMessageWithImage(message) {
+async function sendToChannels(content) {
   for (const id of channelIds) {
     try {
       const channel = await client.channels.fetch(id);
-      // Send the message with the chart URL
-      await channel.send({ content: message });
+      await channel.send({ content });
     } catch (err) {
-      console.error(`❌ Failed to send to channel ${id}:`, err.message);
+      console.error(`❌ Couldn't send to ${id}:`, err.message);
     }
   }
 }
