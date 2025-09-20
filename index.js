@@ -1,5 +1,5 @@
 // index.js
-// Crypto Market Pulse bot (with Kripto11 logo at bottom + "Let's Play")
+// Crypto Market Bot (KRIPTO11 branding, smaller logo thumbnail)
 
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
@@ -92,9 +92,10 @@ function buildEmbeds(prices) {
     if (!hottest || Math.abs(r.change) > Math.abs(hottest.change)) hottest = r;
   }
 
+  // MAIN EMBED
   const main = new EmbedBuilder()
     .setColor(hottest ? colorByChange(hottest.change) : 0x2B2D31)
-    .setTitle('📊 Market Pulse — USD')
+    .setTitle('💎 **𝗞𝗥𝗜𝗣𝗧𝗢𝟭𝟭 — USD** 💎')
     .setDescription('Key coins performance (24h).')
     .setFooter({ text: 'Source: CoinGecko • Not financial advice' })
     .setTimestamp(new Date());
@@ -107,6 +108,7 @@ function buildEmbeds(prices) {
     });
   });
 
+  // BUZZ EMBED with small logo thumbnail
   const buzz = new EmbedBuilder()
     .setTitle('🔥 Buzz & Forecast')
     .setColor(hottest ? colorByChange(hottest.change) : 0x2B2D31)
@@ -117,8 +119,8 @@ function buildEmbeds(prices) {
           `**Forecast:** Watch volatility ahead.`
         : 'No standout mover detected in this snapshot.'
     )
-    // ✅ Logo at the bottom
-    .setImage('https://raw.githubusercontent.com/leledydy/kraken-crypbot/main/kripto-gold.png')
+    // ✅ Use logo as thumbnail (smaller than full image)
+    .setThumbnail('https://raw.githubusercontent.com/leledydy/kraken-crypbot/main/kripto-gold.png')
     .setFooter({ text: "Let's Play 🎮" })
     .setTimestamp(new Date());
 
