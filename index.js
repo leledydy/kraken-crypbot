@@ -1,4 +1,3 @@
-// index.js
 // Crypto Market Bot (KRIPTO11 branding, smaller logo thumbnail)
 
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
@@ -16,7 +15,8 @@ const SYMBOLS = [
   { symbol: 'BTC',  name: 'Bitcoin',  candidates: ['bitcoin'] },
   { symbol: 'USDT', name: 'Tether',   candidates: ['tether'] },
   { symbol: 'ETH',  name: 'Ethereum', candidates: ['ethereum'] },
-  { symbol: 'TON',  name: 'Toncoin',  candidates: ['toncoin'] },
+  // ✅ FIX: Toncoin uses "the-open-network" on CoinGecko
+  { symbol: 'TON',  name: 'Toncoin',  candidates: ['the-open-network', 'toncoin'] },
   { symbol: 'NOT',  name: 'Notcoin',  candidates: ['notcoin'] },
   { symbol: 'DOGS', name: 'Dogs',     candidates: ['dogs', 'dogs-2'] },
   { symbol: 'SOL',  name: 'Solana',   candidates: ['solana'] },
@@ -41,23 +41,56 @@ const suggestionFromChange = (c) => {
 
 // === COINGECKO ===
 let resolvedIdCache = {};
+
+// Resolve given candidate IDs using /simple/price. If none match, try a light fallback via /coins/list.
 async function resolveIds() {
-  const allCandidates = [...new Set(SYMBOLS.flatMap(c => c.candidates))];
-  const params = new URLSearchParams({
-    ids: allCandidates.join(','),
-    vs_currencies: 'usd',
-    include_24hr_change: 'true'
-  });
-  const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?${params.toString()}`);
-  SYMBOLS.forEach(entry => {
-    const found = entry.candidates.find(id => data[id]?.usd !== undefined);
-    resolvedIdCache[entry.symbol] = found || entry.candidates[0];
-  });
+  const dedupCandidates = [...new Set(SYMBOLS.flatMap(c => c.candidates))];
+
+  // Try simple/price first
+  try {
+    const params = new URLSearchParams({
+      ids: dedupCandidates.join(','),
+      vs_currencies: 'usd',
+      include_24hr_change: 'true'
+    });
+    const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?${params.toString()}`, {
+      timeout: 15000,
+      headers: { 'Accept': 'application/json' }
+    });
+
+    SYMBOLS.forEach(entry => {
+      const found = entry.candidates.find(id => data[id]?.usd !== undefined);
+      if (found) resolvedIdCache[entry.symbol] = found;
+    });
+  } catch (_) {
+    // ignore; we'll attempt fallback below
+  }
+
+  // Fallback: for any unresolved symbol, use /coins/list to find by exact name/symbol match
+  const unresolved = SYMBOLS.filter(s => !resolvedIdCache[s.symbol]);
+  if (unresolved.length) {
+    try {
+      const { data: list } = await axios.get('https://api.coingecko.com/api/v3/coins/list', {
+        timeout: 20000,
+        headers: { 'Accept': 'application/json' }
+      });
+      for (const s of unresolved) {
+        // Prefer exact name match, otherwise exact symbol match (case-insensitive)
+        const byName = list.find(x => (x.name || '').toLowerCase() === s.name.toLowerCase());
+        const bySymbol = list.find(x => (x.symbol || '').toLowerCase() === s.symbol.toLowerCase());
+        const pick = byName?.id || bySymbol?.id || s.candidates[0];
+        resolvedIdCache[s.symbol] = pick;
+      }
+    } catch {
+      // Last resort: use first candidate
+      unresolved.forEach(s => (resolvedIdCache[s.symbol] = s.candidates[0]));
+    }
+  }
 }
 
 async function fetchQuotes() {
   if (!Object.keys(resolvedIdCache).length) {
-    try { await resolveIds(); } catch { SYMBOLS.forEach(e => (resolvedIdCache[e.symbol] = e.candidates[0])); }
+    await resolveIds();
   }
   const ids = SYMBOLS.map(s => resolvedIdCache[s.symbol]);
   const params = new URLSearchParams({
@@ -65,7 +98,10 @@ async function fetchQuotes() {
     vs_currencies: 'usd',
     include_24hr_change: 'true'
   });
-  const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?${params.toString()}`);
+  const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?${params.toString()}`, {
+    timeout: 15000,
+    headers: { 'Accept': 'application/json' }
+  });
   return data;
 }
 
@@ -108,7 +144,7 @@ function buildEmbeds(prices) {
     });
   });
 
-  // BUZZ EMBED with small logo thumbnail
+  // BUZZ EMBED with small logo thumbnail (requested: image only at bottom & "Let’s Play")
   const buzz = new EmbedBuilder()
     .setTitle('🔥 Buzz & Forecast')
     .setColor(hottest ? colorByChange(hottest.change) : 0x2B2D31)
@@ -119,7 +155,7 @@ function buildEmbeds(prices) {
           `**Forecast:** Watch volatility ahead.`
         : 'No standout mover detected in this snapshot.'
     )
-    // ✅ Use logo as thumbnail (smaller than full image)
+    // Thumbnail keeps logo small (smaller than a banner image)
     .setThumbnail('https://raw.githubusercontent.com/leledydy/kraken-crypbot/main/kripto-gold.png')
     .setFooter({ text: "Let's Play 🎮" })
     .setTimestamp(new Date());
@@ -149,9 +185,12 @@ async function postPulse() {
 // === LIFECYCLE ===
 client.once('ready', async () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
-  await fetchQuotes(); // resolve ids
+  await resolveIds();
+  // Optional: verify mappings on boot
+  console.log('Resolved IDs:', resolvedIdCache);
 
   await postPulse();
+  // Every 6 hours
   cron.schedule('0 */6 * * *', () => {
     postPulse();
   });
